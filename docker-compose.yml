@@ -1,0 +1,13 @@
+# Desarrollo: solo la base de datos. API y web se lanzan con `npm run dev`.
+name: coperoco
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: coperoco
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cambia-esto}
+      POSTGRES_DB: coperoco
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+volumes:
+  pgdata:
