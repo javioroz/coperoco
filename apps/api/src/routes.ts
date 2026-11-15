@@ -1,45 +1,93 @@
-import { randomBytes } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   createGroupSchema,
   updateGroupSchema,
   credentialsSchema,
+  registerSchema,
   syncRequestSchema,
   expenseSyncRequestSchema,
   type AuthResponse,
   type Expense,
   type ExpenseSyncResponse,
+  type Group,
+  type SignupInvite,
   type Item,
   type SyncResponse,
 } from "@coperoco/shared";
 import { bearer, createSession, destroySession, hashPassword, requireMember, requireUser, verifyPassword } from "./auth.js";
+import { newInviteCode } from "./codes.js";
 import { pool } from "./db.js";
 
 const uuidParam = z.object({ id: z.string().uuid() });
 const INVITE_TTL_MS = 7 * 24 * 3600 * 1000;
-const INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-function newInviteCode() {
-  return Array.from(randomBytes(8), (b) => INVITE_ALPHABET[b % INVITE_ALPHABET.length]).join("");
-}
+const MAX_OPEN_SIGNUP_INVITES = 5; // invitaciones de plataforma sin usar que puede tener un usuario a la vez
+const INVALID_INVITE = "código de invitación inválido o caducado";
 
 export async function routes(app: FastifyInstance) {
   // ---------- Auth ----------
-  app.post("/auth/register", async (req, reply) => {
-    const { username, password } = credentialsSchema.parse(req.body);
-    const hash = await hashPassword(password);
-    const { rows } = await pool.query(
-      `INSERT INTO users (username, password_hash) VALUES ($1, $2)
-       ON CONFLICT (username) DO NOTHING RETURNING id, username`,
-      [username, hash],
+  // Registro: solo con invitación. Límite por IP para frenar el abuso / la adivinación de códigos.
+  app.post("/auth/register", { config: { rateLimit: { max: 10, timeWindow: "1 hour" } } }, async (req, reply) => {
+    const { username, password, inviteCode } = registerSchema.parse(req.body);
+
+    // Comprobación barata antes de gastar CPU en el hash de la contraseña
+    const probe = await pool.query(
+      `SELECT 1 FROM signup_invites WHERE code = $1 AND used_at IS NULL AND expires_at > now()
+       UNION ALL SELECT 1 FROM invites WHERE code = $1 AND expires_at > now()`,
+      [inviteCode],
     );
-    if (!rows[0]) return reply.code(409).send({ error: "el usuario ya existe" });
-    const res: AuthResponse = { token: await createSession(rows[0].id), user: rows[0] };
-    return res;
+    if (!probe.rowCount) return reply.code(403).send({ error: INVALID_INVITE });
+
+    const hash = await hashPassword(password);
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      // 1) ¿invitación de plataforma? (se bloquea la fila: un solo uso aunque lleguen dos registros a la vez)
+      let invitedBy: string | null = null;
+      let group: Group | null = null;
+      const platform = await client.query(
+        "SELECT created_by FROM signup_invites WHERE code = $1 AND used_at IS NULL AND expires_at > now() FOR UPDATE",
+        [inviteCode],
+      );
+      if (platform.rows[0]) {
+        invitedBy = platform.rows[0].created_by;
+      } else {
+        // 2) ¿enlace de invitación a un grupo? también permite crear cuenta y entra directamente al grupo
+        const gi = await client.query(
+          `SELECT g.id, g.app, g.name, g.emoji, i.created_by
+           FROM invites i JOIN groups g ON g.id = i.group_id WHERE i.code = $1 AND i.expires_at > now()`,
+          [inviteCode],
+        );
+        if (!gi.rows[0]) { await client.query("ROLLBACK"); return reply.code(403).send({ error: INVALID_INVITE }); }
+        const { created_by, ...g } = gi.rows[0];
+        invitedBy = created_by;
+        group = g;
+      }
+
+      const created = await client.query(
+        `INSERT INTO users (username, password_hash, invited_by) VALUES ($1, $2, $3)
+         ON CONFLICT (username) DO NOTHING RETURNING id, username`,
+        [username, hash, invitedBy],
+      );
+      const user = created.rows[0];
+      if (!user) { await client.query("ROLLBACK"); return reply.code(409).send({ error: "el usuario ya existe" }); }
+
+      if (group) await client.query("INSERT INTO memberships (group_id, user_id) VALUES ($1, $2)", [group.id, user.id]);
+      else await client.query("UPDATE signup_invites SET used_by = $2, used_at = now() WHERE code = $1", [inviteCode, user.id]);
+
+      await client.query("COMMIT");
+      const res: AuthResponse = { token: await createSession(user.id), user, ...(group && { group }) };
+      return res;
+    } catch (e) {
+      await client.query("ROLLBACK");
+      throw e;
+    } finally {
+      client.release();
+    }
   });
 
-  app.post("/auth/login", async (req, reply) => {
+  app.post("/auth/login", { config: { rateLimit: { max: 10, timeWindow: "15 minutes" } } }, async (req, reply) => {
     const { username, password } = credentialsSchema.parse(req.body);
     const { rows } = await pool.query("SELECT id, username, password_hash FROM users WHERE username = $1", [username]);
     const u = rows[0];
@@ -59,6 +107,31 @@ export async function routes(app: FastifyInstance) {
     priv.addHook("preHandler", requireUser);
 
     priv.get("/me", async (req) => req.user);
+
+    // ---------- Invitaciones de plataforma (para que otra persona cree cuenta) ----------
+    priv.get("/signup-invites", async (req) => {
+      const { rows } = await pool.query(
+        `SELECT s.code, (extract(epoch FROM s.expires_at) * 1000)::bigint AS "expiresAt", u.username AS "usedBy"
+         FROM signup_invites s LEFT JOIN users u ON u.id = s.used_by
+         WHERE s.created_by = $1 ORDER BY s.created_at DESC LIMIT 20`,
+        [req.user.id],
+      );
+      return rows as SignupInvite[];
+    });
+
+    priv.post("/signup-invites", async (req, reply) => {
+      const open = await pool.query(
+        "SELECT count(*)::int AS n FROM signup_invites WHERE created_by = $1 AND used_at IS NULL AND expires_at > now()",
+        [req.user.id],
+      );
+      if (open.rows[0].n >= MAX_OPEN_SIGNUP_INVITES)
+        return reply.code(400).send({ error: `Ya tienes ${MAX_OPEN_SIGNUP_INVITES} invitaciones sin usar. Espera a que se usen o caduquen.` });
+      const code = newInviteCode(10);
+      const expiresAt = Date.now() + INVITE_TTL_MS;
+      await pool.query("INSERT INTO signup_invites (code, created_by, expires_at) VALUES ($1, $2, to_timestamp($3/1000.0))", [code, req.user.id, expiresAt]);
+      const res: SignupInvite = { code, expiresAt, usedBy: null };
+      return res;
+    });
 
     // ---------- Grupos ----------
     priv.get("/groups", async (req) => {

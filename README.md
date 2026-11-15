@@ -38,6 +38,37 @@ interfaz y un único frontend (PWA). Un usuario puede tener **varios grupos dent
   18 personas con saldo; voraz a partir de ahí. "Pagado" registra la transferencia como un gasto de pago.
 - La lógica está en `packages/shared/src/gastoco.ts` con tests: `npm test -w @coperoco/shared`.
 
+## Cuentas: registro solo por invitación
+
+No se puede crear una cuenta sin un código de invitación. Hay dos tipos, ambos válidos al registrarse:
+
+- **Invitación de plataforma**: la crea cualquier usuario desde el menú de usuario → *Invitar a CoPeroCo*. Un solo uso,
+  caduca a los 7 días, máximo 5 sin usar a la vez. Se guarda quién invitó a cada usuario (`users.invited_by`).
+- **Enlace de invitación a un grupo** (`/join/CÓDIGO`): quien no tiene cuenta se registra con él y entra directamente al grupo.
+
+Los enlaces `/invite/CÓDIGO` (plataforma) y `/join/CÓDIGO` (grupo) abren el registro con el código ya puesto.
+
+### El primer usuario
+
+Para él no hay nadie que invite, así que su código se crea desde el servidor:
+
+```bash
+dc exec api npm run invite          # en producción
+npm run invite -w @coperoco/api     # en desarrollo
+```
+
+Imprime el código (10 caracteres, un solo uso, 7 días) y el enlace `https://TU_DOMINIO/invite/CÓDIGO`. Se puede pasar
+el número de días de validez como argumento (`npm run invite 30`). El mismo comando sirve en cualquier momento para
+recuperar el acceso a la plataforma si nadie tiene invitaciones disponibles.
+
+`dc` es un alias de `docker compose -f deploy/docker-compose.prod.yml --env-file .env` (ver *Despliegue en VPS*).
+
+### Límites
+
+Intentos por IP (en memoria, se reinician con la API): 10 logins cada 15 min y 10 registros por hora.
+La API confía en `X-Forwarded-For` (`trustProxy`), por lo que **solo debe ser accesible a través de Caddy**
+(así es en `deploy/docker-compose.prod.yml`: la API no publica puertos).
+
 ## Desarrollo
 
 ```bash
@@ -60,14 +91,45 @@ npm run dev        # API :3000 + web :5173 (proxy /api)
 
 ## Despliegue en VPS
 
+Requisitos: un VPS con Docker, un dominio con un registro `A` apuntando a su IP y los puertos 80 y 443 abiertos.
+
 ```bash
-cp .env.example .env   # POSTGRES_PASSWORD y DOMAIN
-docker compose -f deploy/docker-compose.prod.yml --env-file .env up -d --build
+git clone https://github.com/javioroz/coperoco.git && cd coperoco
+cp .env.example .env
+# edita .env: POSTGRES_PASSWORD (genérala con `openssl rand -hex 24`; sin / + = que romperían la URL) y DOMAIN
+chmod 600 .env
+
+# alias práctico (añádelo a ~/.bashrc para que persista)
+alias dc='docker compose -f ~/coperoco/deploy/docker-compose.prod.yml --env-file ~/coperoco/.env'
+
+dc up -d --build          # construye y arranca db, api y web (Caddy)
+dc ps                     # los tres deben estar "Up"
+dc logs --tail 40 api     # deben verse las migraciones aplicadas
+curl -s https://TU_DOMINIO/api/health     # {"ok":true}
 ```
-Caddy sirve la web, proxya `/api` y gestiona el certificado (el DNS del dominio debe apuntar al VPS).
+
+Caddy sirve la web, proxya `/api` y gestiona el certificado HTTPS. Solo se publican los puertos 80 y 443:
+la base de datos y la API no son accesibles desde Internet.
+
+**Después del primer despliegue, crea tu invitación** (el registro está cerrado hasta que exista una) y regístrate con el enlace:
+
+```bash
+dc exec api npm run invite
+```
+
+**Actualizar:** `cd ~/coperoco && git pull && dc up -d --build` (las migraciones se aplican solas al arrancar la API).
+
+**Copia de seguridad** (los datos solo existen en el volumen de Postgres del servidor):
+
+```bash
+dc exec -T db pg_dump -U coperoco coperoco | gzip > ~/backups/db-$(date +%F).sql.gz
+gunzip -c ~/backups/db-FECHA.sql.gz | dc exec -T db psql -U coperoco coperoco     # restaurar
+```
 
 ## Pendiente / ideas
 
 - Iconos PNG 192/512 (ahora SVG) para mejor instalabilidad en Android/iOS.
-- Rate limiting en `/auth/*`, limpieza de tombstones e invitaciones caducadas.
-- UI para editar la cantidad de los items (el modelo y la API ya la soportan).
+- Caducidad de sesiones y recuperación de contraseña.
+- Programar la copia de seguridad diaria (cron) y copiarla fuera del servidor.
+- Limpieza de marcas de borrado (items/gastos) e invitaciones caducadas.
+- FavorCo y ViajeCo: solo tienen el esqueleto (grupos, invitaciones, miembros).

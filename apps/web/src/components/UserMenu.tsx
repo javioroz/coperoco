@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth";
 import { UserIcon } from "./icons";
+import SignupInviteModal from "./SignupInviteModal";
 
 /** Icono de usuario con popover: nombre + cerrar sesión. */
 export default function UserMenu() {
   const { session, signOut } = useAuth();
   const [open, setOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -25,9 +27,11 @@ export default function UserMenu() {
       {open && (
         <div className="popover" role="menu">
           <p className="popover-name">{session?.user.username}</p>
+          <button onClick={() => { setOpen(false); setInviteOpen(true); }}>Invitar a CoPeroCo</button>
           <button className="danger" onClick={signOut}>Cerrar sesión</button>
         </div>
       )}
+      <SignupInviteModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
     </div>
   );
 }

@@ -7,6 +7,20 @@ export const credentialsSchema = z.object({
 });
 export type Credentials = z.infer<typeof credentialsSchema>;
 
+/** Registro: solo con una invitación (de plataforma o de un grupo). */
+export const registerSchema = credentialsSchema.extend({
+  inviteCode: z.string().trim().toUpperCase().min(4).max(32),
+});
+export type RegisterInput = z.infer<typeof registerSchema>;
+
+/** Invitación de plataforma creada por un usuario. */
+export interface SignupInvite {
+  code: string;
+  expiresAt: number;
+  /** nombre de quien la usó, o null si sigue disponible */
+  usedBy: string | null;
+}
+
 export interface User {
   id: string;
   username: string;
@@ -14,6 +28,8 @@ export interface User {
 export interface AuthResponse {
   token: string;
   user: User;
+  /** Presente si te registraste con el enlace de invitación a un grupo: ya eres miembro. */
+  group?: Group;
 }
 
 // ---------- Aplicaciones de la plataforma ----------

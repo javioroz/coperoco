@@ -1,5 +1,5 @@
 import type {
-  AuthResponse, Credentials, ExpenseSyncRequest, ExpenseSyncResponse, Group, Invite, Member, SyncRequest, SyncResponse,
+  AuthResponse, Credentials, ExpenseSyncRequest, ExpenseSyncResponse, Group, Invite, Member, RegisterInput, SignupInvite, SyncRequest, SyncResponse,
 } from "@coperoco/shared";
 
 const TOKEN_KEY = "coperoco:session";
@@ -36,7 +36,9 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const api = {
-  register: (c: Credentials) => request<AuthResponse>("POST", "/auth/register", c),
+  register: (c: RegisterInput) => request<AuthResponse>("POST", "/auth/register", c),
+  signupInvites: () => request<SignupInvite[]>("GET", "/signup-invites"),
+  createSignupInvite: () => request<SignupInvite>("POST", "/signup-invites"),
   login: (c: Credentials) => request<AuthResponse>("POST", "/auth/login", c),
   logout: () => request<{ ok: true }>("POST", "/auth/logout"),
   groups: () => request<Group[]>("GET", "/groups"),

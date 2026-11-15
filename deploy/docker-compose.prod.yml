@@ -16,6 +16,7 @@ services:
     environment:
       DATABASE_URL: postgres://coperoco:${POSTGRES_PASSWORD}@db:5432/coperoco
       PORT: 3000
+      DOMAIN: ${DOMAIN}   # solo para mostrar el enlace en `npm run invite`
   web:
     build: { context: .., dockerfile: deploy/Dockerfile.web }
     restart: unless-stopped

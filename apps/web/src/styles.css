@@ -24,7 +24,7 @@ main { max-width: 560px; margin: 0 auto; padding: 1rem; padding-bottom: max(1rem
 /* Menú de usuario */
 .user-menu { position: relative; }
 .popover {
-  position: absolute; right: 0; top: calc(100% + 4px); min-width: 180px; padding: .75rem;
+  position: absolute; right: 0; top: calc(100% + 4px); min-width: 200px; padding: .75rem;
   display: flex; flex-direction: column; gap: .6rem;
   background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgb(0 0 0 / .25);
 }
