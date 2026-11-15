@@ -1,4 +1,4 @@
-// Lógica de dominio de GastoCo. Todo en CÉNTIMOS (enteros) para evitar errores de coma flotante.
+// Lógica de dominio de GastosCo. Todo en CÉNTIMOS (enteros) para evitar errores de coma flotante.
 
 export interface ExpenseLike {
   id: string;

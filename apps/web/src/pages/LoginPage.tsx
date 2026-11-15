@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
+import { logos } from "../assets/logos";
 import { useAuth } from "../auth";
 import { db } from "../db";
 
@@ -36,7 +37,8 @@ export default function LoginPage() {
 
   return (
     <form onSubmit={submit} className="card">
-      <h1>CoPeroCo</h1>
+      <img className="login-logo" src={logos.coperoco} alt="" />
+      <h1 className="login-title">CoPeroCo</h1>
       {mode === "register" && (
         <>
           <input placeholder="Código de invitación" value={inviteCode} onChange={(e) => setInviteCode(e.target.value.toUpperCase())}

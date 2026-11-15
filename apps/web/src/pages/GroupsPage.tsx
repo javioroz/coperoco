@@ -52,7 +52,7 @@ export default function GroupsPage() {
     <>
       <Header
         left={<Link className="icon-btn" to="/" aria-label="Volver"><BackIcon /></Link>}
-        title={`${app.icon} ${app.name}`}
+        title={<span className="brand"><img src={app.logo} alt="" />{app.name}</span>}
         right={<UserMenu />}
       />
       <main className="with-fab">
@@ -71,7 +71,7 @@ export default function GroupsPage() {
         </ul>
       </main>
 
-      <button className="fab" aria-label={`Crear o unirse a ${app.the}`} onClick={() => setModalOpen(true)}>
+      <button className="fab" aria-label={`Crear o unirse ${app.toThe}`} onClick={() => setModalOpen(true)}>
         <PlusIcon />
       </button>
 

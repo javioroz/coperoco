@@ -1,5 +1,5 @@
 import type {
-  AuthResponse, Credentials, ExpenseSyncRequest, ExpenseSyncResponse, Group, Invite, Member, RegisterInput, SignupInvite, SyncRequest, SyncResponse,
+  AuthResponse, Credentials, EvaluateFavorInput, ExpenseSyncRequest, ExpenseSyncResponse, FavorEvaluation, FavorSyncRequest, FavorSyncResponse, Group, Invite, LlmConfigInput, LlmConfigStatus, Member, RegisterInput, SignupInvite, SyncRequest, SyncResponse,
 } from "@coperoco/shared";
 
 const TOKEN_KEY = "coperoco:session";
@@ -49,6 +49,11 @@ export const api = {
   leaveGroup: (id: string) => request<{ ok: true }>("DELETE", `/groups/${id}/membership`),
   createInvite: (id: string) => request<Invite>("POST", `/groups/${id}/invites`),
   join: (code: string) => request<Group>("POST", `/invites/${encodeURIComponent(code)}/join`),
+  syncFavors: (id: string, body: FavorSyncRequest) => request<FavorSyncResponse>("POST", `/groups/${id}/favors/sync`, body),
+  llmConfig: (id: string) => request<LlmConfigStatus>("GET", `/groups/${id}/llm`),
+  saveLlmConfig: (id: string, c: LlmConfigInput) => request<LlmConfigStatus>("PUT", `/groups/${id}/llm`, c),
+  deleteLlmConfig: (id: string) => request<{ ok: true }>("DELETE", `/groups/${id}/llm`),
+  evaluateFavor: (id: string, b: EvaluateFavorInput) => request<FavorEvaluation>("POST", `/groups/${id}/favors/evaluate`, b),
   syncExpenses: (id: string, body: ExpenseSyncRequest) => request<ExpenseSyncResponse>("POST", `/groups/${id}/expenses/sync`, body),
   sync: (id: string, body: SyncRequest) => request<SyncResponse>("POST", `/groups/${id}/sync`, body),
 };

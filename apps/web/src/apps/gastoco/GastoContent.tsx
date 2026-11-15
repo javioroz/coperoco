@@ -10,7 +10,8 @@ import BalancesTab from "./BalancesTab";
 import ExpenseModal from "./ExpenseModal";
 import StatsTab from "./StatsTab";
 import { dateLabel, eur, todayISO } from "./format";
-import { addExpense, refreshMembers, syncExpenses } from "./sync";
+import { refreshMembers } from "../../members";
+import { addExpense, syncExpenses } from "./sync";
 
 /** Saldo del usuario en un grupo (tarjeta del listado), desde datos locales. */
 export function GastoBadge({ groupId }: { groupId: string }) {

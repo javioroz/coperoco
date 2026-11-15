@@ -32,7 +32,7 @@ export default function GroupPage() {
       <Header
         left={<Link className="icon-btn" to={listPath} aria-label="Volver"><BackIcon /></Link>}
         title={group ? `${group.emoji ?? app.defaultEmoji} ${group.name}` : "…"}
-        right={<button className="icon-btn" aria-label={`Ajustes de ${app.the}`} onClick={() => setSettingsOpen(true)}><SettingsIcon /></button>}
+        right={<button className="icon-btn" aria-label={`Ajustes ${app.ofThe}`} onClick={() => setSettingsOpen(true)}><SettingsIcon /></button>}
       />
       <main>
         {group && <app.Content group={group} onGone={() => { void db.groups.delete(id); nav(listPath, { replace: true }); }} />}

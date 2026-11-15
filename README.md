@@ -2,14 +2,14 @@
 
 Plataforma de pequeñas apps para compañeros de piso y amigos, con una misma cuenta, una misma
 interfaz y un único frontend (PWA). Un usuario puede tener **varios grupos dentro de cada app**
-(p.ej. 2 cestas en CestaCo, 1 grupo en GastoCo, 3 en FavorCo) y unirse a ellos por invitación.
+(p.ej. 2 cestas en CestaCo, 1 grupo en GastosCo, 3 en FavoresCo) y unirse a ellos por invitación.
 
 | App | Estado |
 |---|---|
 | 🧺 **CestaCo** — lista de la compra compartida | funcional |
-| 💸 **GastoCo** — gastos compartidos (estilo Splitwise/Tricount) | funcional |
-| 🤝 **FavorCo** — favores entre amigos | esqueleto |
-| ✈️ **ViajeCo** — planes de viaje en grupo | esqueleto |
+| 💸 **GastosCo** — gastos compartidos (estilo Splitwise/Tricount) | funcional |
+| 🤝 **FavoresCo** — favores entre amigos, con puntuación manual o por IA | funcional |
+| ✈️ **ViajesCo** — planes de viaje en grupo | esqueleto |
 
 ## Estructura (npm workspaces)
 
@@ -20,6 +20,14 @@ interfaz y un único frontend (PWA). Un usuario puede tener **varios grupos dent
 | `packages/shared` | Tipos y esquemas zod compartidos (`APP_IDS`, contrato de la API). |
 | `deploy/` | Dockerfiles, Caddyfile (HTTPS automático) y compose de producción. |
 
+## Marca e iconos
+
+- Los logos están en `apps/web/src/assets/logos/` (el de la plataforma y uno por app) y cada app tiene su color en `apps/web/src/apps/registry.tsx`.
+- Los colores de acento son libres: `color.ts` calcula el color del texto sobre cada uno (claro u oscuro, según el contraste WCAG) y una variante legible del color para usarlo como texto, en modo claro y oscuro.
+- Los iconos de la PWA (192, 512, *maskable*, Apple y favicon) se generan a partir de las imágenes originales:
+  `python3 apps/web/scripts/generate-icons.py <carpeta con los PNG>` (requiere Pillow).
+- El service worker precachea los logos para que la app se vea igual sin conexión.
+
 ## Añadir una app nueva
 
 1. Añade su id a `APP_IDS` en `packages/shared/src/index.ts`.
@@ -28,7 +36,7 @@ interfaz y un único frontend (PWA). Un usuario puede tener **varios grupos dent
    Listado de grupos, invitaciones, miembros, ajustes y tema de color vienen gratis.
 4. Si necesita datos propios, añade tablas/rutas en la API (como hace CestaCo con `items`).
 
-## GastoCo: cómo funciona
+## GastosCo: cómo funciona
 
 - Pestañas **Gastos** (lista local-first con botón de sincronizar, como CestaCo) y **Saldos**.
 - Un gasto: descripción, importe, categoría, fecha, quién pagó y entre quiénes se reparte (a partes iguales).
@@ -37,6 +45,25 @@ interfaz y un único frontend (PWA). Un usuario puede tener **varios grupos dent
 - **Saldar deudas** propone el mínimo de transferencias: exacto (programación dinámica sobre subconjuntos) hasta
   18 personas con saldo; voraz a partir de ahí. "Pagado" registra la transferencia como un gasto de pago.
 - La lógica está en `packages/shared/src/gastoco.ts` con tests: `npm test -w @coperoco/shared`.
+
+## FavoresCo: cómo funciona
+
+- Pestañas **Favores** (lista local-first con sincronización automática) y **Ranking** (clasificación de amistad + sorteo de la próxima tarea).
+- Un favor: descripción, **quién lo hizo** (recibe los puntos), **a quién afecta** (uno, varios o todos), fecha y puntuación de **−10 a +10**.
+- La puntuación es **manual** (deslizador) o la pone una **IA**, que además escribe un comentario y le asigna un mote a quien hizo el favor.
+- **Ranking**: suma de puntos por persona; el sorteo reparte la próxima tarea con probabilidad **inversa** a los puntos (`packages/shared/src/favorco.ts`, con tests).
+
+### Puntuación con IA
+
+El **creador del grupo** la configura en *Ajustes → Puntuación con IA* (endpoint, modelo y clave de una API **compatible con OpenAI**: OpenAI, OpenRouter, Groq, Mistral…).
+
+- La clave se guarda **cifrada** (AES-256-GCM) en la base de datos y **nunca se envía a ningún cliente**: la llamada al LLM la hace el servidor.
+  Requiere `SECRETS_KEY` en el `.env` del servidor (`openssl rand -hex 32`). **Guárdala**: si cambia, hay que volver a introducir las claves.
+- Al puntuar se envía a tu proveedor la descripción del favor, el nombre del grupo y los **nombres de usuario** de las personas implicadas (y los últimos favores de quien lo hizo, para el mote).
+- Cada sesión puede puntuar como máximo 30 favores por hora (la cuota de la API es del creador del grupo).
+- **Protección SSRF**: como el endpoint lo elige un usuario, el servidor solo conecta por **HTTPS al puerto 443 de direcciones públicas**; rechaza IPs internas, localhost y redirecciones, y lo comprueba sobre la IP real de la conexión (a prueba de DNS rebinding).
+  Si quieres usar un modelo **local** (p. ej. Ollama en tu red) pon `LLM_ALLOW_PRIVATE=1` en la API: **desactiva esa protección**, úsalo solo si sabes lo que haces.
+- Un favor puntuado por IA solo se vuelve a evaluar si cambias la descripción, quién lo hizo o a quién afecta.
 
 ## Cuentas: registro solo por invitación
 
@@ -96,7 +123,8 @@ Requisitos: un VPS con Docker, un dominio con un registro `A` apuntando a su IP 
 ```bash
 git clone https://github.com/javioroz/coperoco.git && cd coperoco
 cp .env.example .env
-# edita .env: POSTGRES_PASSWORD (genérala con `openssl rand -hex 24`; sin / + = que romperían la URL) y DOMAIN
+# edita .env: POSTGRES_PASSWORD (genérala con `openssl rand -hex 24`; sin / + = que romperían la URL), DOMAIN
+# y SECRETS_KEY (`openssl rand -hex 32`; necesaria para la IA de FavoresCo; guárdala)
 chmod 600 .env
 
 # alias práctico (añádelo a ~/.bashrc para que persista)
@@ -132,4 +160,5 @@ gunzip -c ~/backups/db-FECHA.sql.gz | dc exec -T db psql -U coperoco coperoco   
 - Caducidad de sesiones y recuperación de contraseña.
 - Programar la copia de seguridad diaria (cron) y copiarla fuera del servidor.
 - Limpieza de marcas de borrado (items/gastos) e invitaciones caducadas.
-- FavorCo y ViajeCo: solo tienen el esqueleto (grupos, invitaciones, miembros).
+- ViajesCo: solo tiene el esqueleto (grupos, invitaciones, miembros).
+- FavoresCo: soportar APIs que no sean compatibles con OpenAI (p. ej. Anthropic), y un historial de qué se envió a la IA.

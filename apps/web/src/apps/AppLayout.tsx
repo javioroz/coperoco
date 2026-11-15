@@ -1,5 +1,6 @@
 import { createContext, useContext, type CSSProperties } from "react";
 import { Navigate, Outlet, useParams } from "react-router-dom";
+import { accentVars } from "../color";
 import { getApp, type AppDef } from "./registry";
 
 const AppCtx = createContext<AppDef>(null!);
@@ -12,7 +13,7 @@ export default function AppLayout() {
   if (!app) return <Navigate to="/" replace />;
   return (
     <AppCtx.Provider value={app}>
-      <div className="app-theme" style={{ "--accent": app.color } as CSSProperties}>
+      <div className="app-theme" style={accentVars(app.color) as CSSProperties}>
         <Outlet />
       </div>
     </AppCtx.Provider>

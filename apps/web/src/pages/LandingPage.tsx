@@ -1,6 +1,8 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
+import { logos } from "../assets/logos";
+import { accentVars } from "../color";
 import { APPS } from "../apps/registry";
 import Header from "../components/Header";
 import UserMenu from "../components/UserMenu";
@@ -14,15 +16,15 @@ export default function LandingPage() {
 
   return (
     <>
-      <Header title="CoPeroCo" right={<UserMenu />} />
+      <Header title={<span className="brand"><img src={logos.coperoco} alt="" />CoPeroCo</span>} right={<UserMenu />} />
       <main>
         <h2>Tus aplicaciones</h2>
         <div className="tiles">
           {APPS.map((app) => {
             const n = groups?.filter((g) => g.app === app.id).length ?? 0;
             return (
-              <Link key={app.id} to={`/${app.id}`} className="tile" style={{ "--accent": app.color } as CSSProperties}>
-                <span className="tile-icon">{app.icon}</span>
+              <Link key={app.id} to={`/${app.id}`} className="tile" style={accentVars(app.color) as CSSProperties}>
+                <img className="tile-logo" src={app.logo} alt="" />
                 <span className="tile-name">{app.name}</span>
                 <span className="tile-tagline">{app.tagline}</span>
                 <span className="tile-meta">

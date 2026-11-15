@@ -17,6 +17,7 @@ import {
 } from "@coperoco/shared";
 import { bearer, createSession, destroySession, hashPassword, requireMember, requireUser, verifyPassword } from "./auth.js";
 import { newInviteCode } from "./codes.js";
+import { favorcoRoutes } from "./favorco.js";
 import { pool } from "./db.js";
 
 const uuidParam = z.object({ id: z.string().uuid() });
@@ -105,6 +106,7 @@ export async function routes(app: FastifyInstance) {
 
   app.register(async (priv) => {
     priv.addHook("preHandler", requireUser);
+    await priv.register(favorcoRoutes); // FavoresCo: favores + configuración de IA
 
     priv.get("/me", async (req) => req.user);
 
@@ -300,7 +302,7 @@ export async function routes(app: FastifyInstance) {
       }
     });
 
-    // ---------- GastoCo: sincronización de gastos ----------
+    // ---------- GastosCo: sincronización de gastos ----------
     priv.post("/groups/:id/expenses/sync", async (req, reply) => {
       const { id } = uuidParam.parse(req.params);
       const { since, changes } = expenseSyncRequestSchema.parse(req.body);

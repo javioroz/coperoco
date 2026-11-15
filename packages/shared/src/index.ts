@@ -93,7 +93,7 @@ export interface SyncResponse {
 }
 export * from "./gastoco.js";
 
-// ---------- GastoCo: gastos + sincronización ----------
+// ---------- GastosCo: gastos + sincronización ----------
 // Mismo esquema que los items de CestaCo: LWW por `updatedAt`, borrado lógico, cursor `seq` del servidor.
 export const expenseSchema = z.object({
   id: z.string().uuid(),
@@ -121,4 +121,73 @@ export type ExpenseSyncRequest = z.infer<typeof expenseSyncRequestSchema>;
 export interface ExpenseSyncResponse {
   items: Expense[];
   cursor: number;
+}
+export * from "./favorco.js";
+
+// ---------- FavoresCo: favores + sincronización ----------
+// Mismo esquema que items/gastos: LWW por `updatedAt`, borrado lógico, cursor `seq` del servidor.
+export const favorSchema = z.object({
+  id: z.string().uuid(),
+  description: z.string().trim().min(1).max(300),
+  /** quien hizo el favor (recibe los puntos) */
+  madeBy: z.string().uuid(),
+  /** a quién afecta / beneficia (puede estar vacío = sin destinatario concreto) */
+  affected: z.array(z.string().uuid()).max(100).refine((a) => new Set(a).size === a.length, "duplicados"),
+  /** Día del favor, YYYY-MM-DD */
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  /** Puntuación -10..+10 (manual o puesta por la IA) */
+  score: z.number().int().min(-10).max(10),
+  /** true = la puntuó la IA */
+  ai: z.boolean(),
+  /** comentario de la IA ("" si no hay) */
+  aiComment: z.string().max(600),
+  /** mote que la IA le asignó a quien hizo el favor ("" si no hay) */
+  nickname: z.string().max(40),
+  createdAt: z.number().int().nonnegative(),
+  deleted: z.boolean(),
+  updatedAt: z.number().int().nonnegative(),
+});
+export type Favor = z.infer<typeof favorSchema>;
+
+export const favorSyncRequestSchema = z.object({
+  since: z.number().int().nonnegative(),
+  changes: z.array(favorSchema).max(500),
+});
+export type FavorSyncRequest = z.infer<typeof favorSyncRequestSchema>;
+export interface FavorSyncResponse {
+  items: Favor[];
+  cursor: number;
+}
+
+// ---------- FavoresCo: puntuación con IA (configuración por grupo, guardada en el servidor) ----------
+export const DEFAULT_LLM_ENDPOINT = "https://api.openai.com/v1/chat/completions";
+export const DEFAULT_LLM_MODEL = "gpt-4o-mini";
+
+export const llmConfigSchema = z.object({
+  /** API compatible con OpenAI (chat/completions) */
+  endpoint: z.string().trim().url().max(300),
+  model: z.string().trim().min(1).max(100),
+  /** Si se omite en una actualización, se conserva la clave actual. Nunca se devuelve. */
+  apiKey: z.string().trim().min(8).max(500).optional(),
+});
+export type LlmConfigInput = z.infer<typeof llmConfigSchema>;
+export interface LlmConfigStatus {
+  configured: boolean;
+  endpoint: string;
+  model: string;
+  /** false si el servidor no tiene SECRETS_KEY (no puede guardar claves) */
+  available: boolean;
+}
+
+export const evaluateFavorSchema = z.object({
+  description: z.string().trim().min(1).max(300),
+  madeBy: z.string().uuid(),
+  affected: z.array(z.string().uuid()).max(100),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+export type EvaluateFavorInput = z.infer<typeof evaluateFavorSchema>;
+export interface FavorEvaluation {
+  score: number;
+  comment: string;
+  nickname: string;
 }

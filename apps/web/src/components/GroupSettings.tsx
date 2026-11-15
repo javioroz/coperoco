@@ -74,13 +74,13 @@ export default function GroupSettings({ groupId, open, onClose }: { groupId: str
   }
 
   async function leave() {
-    if (!confirm(`¿Salir de ${app.thisOne}?`)) return;
+    if (!confirm(`¿Salir ${app.ofThe}?`)) return;
     try { await api.leaveGroup(groupId); await db.groups.delete(groupId); nav("/"); }
     catch { alert("Necesitas conexión para salir"); }
   }
 
   return (
-    <Drawer open={open} onClose={onClose} title={`Ajustes de ${app.the}`}>
+    <Drawer open={open} onClose={onClose} title={`Ajustes ${app.ofThe}`}>
       <section>
         <h3>{app.noun}</h3>
         <form onSubmit={save} className="stack">
@@ -121,8 +121,10 @@ export default function GroupSettings({ groupId, open, onClose }: { groupId: str
         </ul>
       </section>
 
+      {app.Settings && <app.Settings groupId={groupId} open={open} isOwner={isOwner} />}
+
       <section>
-        <button className="danger" onClick={leave}>Salir de {app.the}</button>
+        <button className="danger" onClick={leave}>Salir {app.ofThe}</button>
       </section>
     </Drawer>
   );
