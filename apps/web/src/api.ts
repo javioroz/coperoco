@@ -1,5 +1,5 @@
 import type {
-  AuthResponse, Credentials, Group, Invite, Member, SyncRequest, SyncResponse,
+  AuthResponse, Credentials, ExpenseSyncRequest, ExpenseSyncResponse, Group, Invite, Member, SyncRequest, SyncResponse,
 } from "@coperoco/shared";
 
 const TOKEN_KEY = "coperoco:session";
@@ -47,5 +47,6 @@ export const api = {
   leaveGroup: (id: string) => request<{ ok: true }>("DELETE", `/groups/${id}/membership`),
   createInvite: (id: string) => request<Invite>("POST", `/groups/${id}/invites`),
   join: (code: string) => request<Group>("POST", `/invites/${encodeURIComponent(code)}/join`),
+  syncExpenses: (id: string, body: ExpenseSyncRequest) => request<ExpenseSyncResponse>("POST", `/groups/${id}/expenses/sync`, body),
   sync: (id: string, body: SyncRequest) => request<SyncResponse>("POST", `/groups/${id}/sync`, body),
 };

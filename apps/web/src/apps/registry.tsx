@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import type { AppId, Group } from "@coperoco/shared";
 import ComingSoon from "./ComingSoon";
 import CestaContent, { CestaBadge } from "./cestaco/CestaContent";
+import GastoContent, { GastoBadge } from "./gastoco/GastoContent";
 
 export interface GroupContentProps {
   group: Group;
@@ -37,10 +38,10 @@ export const APPS: AppDef[] = [
     Content: CestaContent, Badge: CestaBadge,
   },
   {
-    id: "gastoco", name: "GastoCo", icon: "💸", tagline: "Gastos compartidos", color: "#2563eb", ready: false,
+    id: "gastoco", name: "GastoCo", icon: "💸", tagline: "Gastos compartidos", color: "#2563eb", ready: true,
     noun: "grupo", plural: "grupos", the: "el grupo", thisOne: "este grupo",
     defaultEmoji: "💸", emojis: ["💸", "💶", "🏠", "🧾", "🍽️", "🛒", "⚡", "🚗", "🎬", "🎉", "🏖️", "🐶", "📱", "🧻", "🍺", "👥"],
-    Content: ComingSoon,
+    Content: GastoContent, Badge: GastoBadge,
   },
   {
     id: "favorco", name: "FavorCo", icon: "🤝", tagline: "Favores entre amigos", color: "#db2777", ready: false,

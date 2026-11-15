@@ -6,7 +6,10 @@ import {
   updateGroupSchema,
   credentialsSchema,
   syncRequestSchema,
+  expenseSyncRequestSchema,
   type AuthResponse,
+  type Expense,
+  type ExpenseSyncResponse,
   type Item,
   type SyncResponse,
 } from "@coperoco/shared";
@@ -193,19 +196,20 @@ export async function routes(app: FastifyInstance) {
         for (const c of changes) {
           // LWW: solo gana si es más reciente. Un item no puede cambiar de grupo.
           await client.query(
-            `INSERT INTO items (id, group_id, name, quantity, checked, deleted, updated_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)
+            `INSERT INTO items (id, group_id, name, quantity, checked, deleted, updated_at, position)
+             VALUES ($1,$2,$3,$4,$5,$6,$7, COALESCE($8::float8, $7::bigint::float8))
              ON CONFLICT (id) DO UPDATE SET
                name = EXCLUDED.name, quantity = EXCLUDED.quantity, checked = EXCLUDED.checked,
-               deleted = EXCLUDED.deleted, updated_at = EXCLUDED.updated_at, seq = nextval('items_seq')
+               deleted = EXCLUDED.deleted, updated_at = EXCLUDED.updated_at,
+               position = COALESCE($8::float8, items.position), seq = nextval('items_seq')
              WHERE items.group_id = EXCLUDED.group_id AND items.updated_at < EXCLUDED.updated_at`,
-            [c.id, id, c.name, c.quantity, c.checked, c.deleted, c.updatedAt],
+            [c.id, id, c.name, c.quantity, c.checked, c.deleted, c.updatedAt, c.position ?? null],
           );
         }
 
         // Cambios nuevos + versión ganadora de lo enviado (para que el cliente limpie su estado "sucio")
         const { rows } = await client.query(
-          `SELECT id, name, quantity, checked, deleted, updated_at AS "updatedAt", seq
+          `SELECT id, name, quantity, checked, deleted, updated_at AS "updatedAt", position, seq
            FROM items WHERE group_id = $1 AND (seq > $2 OR id = ANY($3::uuid[])) ORDER BY seq`,
           [id, since, changes.map((c) => c.id)],
         );
@@ -214,6 +218,53 @@ export async function routes(app: FastifyInstance) {
         const cursor = rows.reduce((m, r) => Math.max(m, r.seq as number), since);
         const items: Item[] = rows.map(({ seq: _seq, ...item }) => item);
         const res: SyncResponse = { items, cursor };
+        return res;
+      } catch (e) {
+        await client.query("ROLLBACK");
+        throw e;
+      } finally {
+        client.release();
+      }
+    });
+
+    // ---------- GastoCo: sincronización de gastos ----------
+    priv.post("/groups/:id/expenses/sync", async (req, reply) => {
+      const { id } = uuidParam.parse(req.params);
+      const { since, changes } = expenseSyncRequestSchema.parse(req.body);
+      if (!(await requireMember(req, reply, id))) return;
+      const g = await pool.query("SELECT app FROM groups WHERE id=$1", [id]);
+      if (g.rows[0]?.app !== "gastoco") return reply.code(400).send({ error: "este grupo no tiene gastos" });
+
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`expenses:${id}`]);
+
+        for (const c of changes) {
+          // LWW: solo gana si es más reciente. Un gasto no puede cambiar de grupo ni de fecha de creación.
+          await client.query(
+            `INSERT INTO expenses (id, group_id, description, amount_cents, paid_by, shared_by, category, date, created_at, deleted, updated_at)
+             VALUES ($1,$2,$3,$4,$5,$6::uuid[],$7,$8,$9,$10,$11)
+             ON CONFLICT (id) DO UPDATE SET
+               description = EXCLUDED.description, amount_cents = EXCLUDED.amount_cents, paid_by = EXCLUDED.paid_by,
+               shared_by = EXCLUDED.shared_by, category = EXCLUDED.category, date = EXCLUDED.date,
+               deleted = EXCLUDED.deleted, updated_at = EXCLUDED.updated_at, seq = nextval('expenses_seq')
+             WHERE expenses.group_id = EXCLUDED.group_id AND expenses.updated_at < EXCLUDED.updated_at`,
+            [c.id, id, c.description, c.amountCents, c.paidBy, c.sharedBy, c.category, c.date, c.createdAt, c.deleted, c.updatedAt],
+          );
+        }
+
+        const { rows } = await client.query(
+          `SELECT id, description, amount_cents AS "amountCents", paid_by AS "paidBy", shared_by AS "sharedBy",
+                  category, date, created_at AS "createdAt", deleted, updated_at AS "updatedAt", seq
+           FROM expenses WHERE group_id = $1 AND (seq > $2 OR id = ANY($3::uuid[])) ORDER BY seq`,
+          [id, since, changes.map((c) => c.id)],
+        );
+        await client.query("COMMIT");
+
+        const cursor = rows.reduce((m, r) => Math.max(m, r.seq as number), since);
+        const items: Expense[] = rows.map(({ seq: _seq, ...e }) => e);
+        const res: ExpenseSyncResponse = { items, cursor };
         return res;
       } catch (e) {
         await client.query("ROLLBACK");

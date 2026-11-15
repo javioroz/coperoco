@@ -7,7 +7,7 @@ interfaz y un único frontend (PWA). Un usuario puede tener **varios grupos dent
 | App | Estado |
 |---|---|
 | 🧺 **CestaCo** — lista de la compra compartida | funcional |
-| 💸 **GastoCo** — gastos compartidos | esqueleto (grupos, invitaciones, miembros) |
+| 💸 **GastoCo** — gastos compartidos (estilo Splitwise/Tricount) | funcional |
 | 🤝 **FavorCo** — favores entre amigos | esqueleto |
 | ✈️ **ViajeCo** — planes de viaje en grupo | esqueleto |
 
@@ -27,6 +27,16 @@ interfaz y un único frontend (PWA). Un usuario puede tener **varios grupos dent
 3. Regístrala en `apps/web/src/apps/registry.tsx` (nombre, icono, color, vocabulario, emojis, `Content`).
    Listado de grupos, invitaciones, miembros, ajustes y tema de color vienen gratis.
 4. Si necesita datos propios, añade tablas/rutas en la API (como hace CestaCo con `items`).
+
+## GastoCo: cómo funciona
+
+- Pestañas **Gastos** (lista local-first con botón de sincronizar, como CestaCo) y **Saldos**.
+- Un gasto: descripción, importe, categoría, fecha, quién pagó y entre quiénes se reparte (a partes iguales).
+- Todo se calcula en **céntimos enteros**; los céntimos sobrantes se reparten de forma determinista, así que
+  todos los dispositivos calculan exactamente los mismos saldos.
+- **Saldar deudas** propone el mínimo de transferencias: exacto (programación dinámica sobre subconjuntos) hasta
+  18 personas con saldo; voraz a partir de ahí. "Pagado" registra la transferencia como un gasto de pago.
+- La lógica está en `packages/shared/src/gastoco.ts` con tests: `npm test -w @coperoco/shared`.
 
 ## Desarrollo
 

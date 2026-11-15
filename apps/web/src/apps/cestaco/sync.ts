@@ -1,15 +1,27 @@
 import { api } from "../../api";
 import { db, type LocalItem } from "../../db";
 
-const inFlight = new Map<string, Promise<void>>();
+interface Run { again: boolean; promise: Promise<void> }
+const running = new Map<string, Run>();
 
-/** Sincroniza los items de un grupo (push de cambios locales + pull de remotos). Evita solapes. */
+/**
+ * Sincroniza los items de un grupo (push de cambios locales + pull de remotos). No hay dos a la vez,
+ * pero si se pide una mientras otra está en curso, se encadena una segunda pasada: la primera pudo
+ * empezar antes de guardar el último cambio local. La promesa devuelta incluye esa segunda pasada.
+ */
 export function syncGroup(groupId: string): Promise<void> {
-  const running = inFlight.get(groupId);
-  if (running) return running;
-  const p = doSync(groupId).finally(() => inFlight.delete(groupId));
-  inFlight.set(groupId, p);
-  return p;
+  const cur = running.get(groupId);
+  if (cur) { cur.again = true; return cur.promise; }
+  const run: Run = { again: false, promise: undefined as unknown as Promise<void> };
+  run.promise = (async () => {
+    try {
+      do { run.again = false; await doSync(groupId); } while (run.again);
+    } finally {
+      running.delete(groupId);
+    }
+  })();
+  running.set(groupId, run);
+  return run.promise;
 }
 
 async function doSync(groupId: string) {
@@ -37,8 +49,8 @@ const now = () => Date.now();
 export const addItem = (groupId: string, name: string, quantity = "") =>
   db.items.add({
     id: crypto.randomUUID(), groupId, name: name.trim(), quantity: quantity.trim(),
-    checked: false, deleted: false, updatedAt: now(), dirty: 1,
+    checked: false, deleted: false, updatedAt: now(), position: now(), dirty: 1,
   });
 
-export const updateItem = (id: string, patch: Partial<Pick<LocalItem, "name" | "quantity" | "checked" | "deleted">>) =>
+export const updateItem = (id: string, patch: Partial<Pick<LocalItem, "name" | "quantity" | "checked" | "deleted" | "position">>) =>
   db.items.update(id, { ...patch, updatedAt: now(), dirty: 1 });

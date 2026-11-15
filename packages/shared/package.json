@@ -5,6 +5,14 @@
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
-  "scripts": { "typecheck": "tsc -p ." },
-  "dependencies": { "zod": "^3.23.8" }
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "node --import tsx --test src/*.test.ts"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0"
+  }
 }
