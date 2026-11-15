@@ -53,12 +53,12 @@ Los enlaces `/invite/CÓDIGO` (plataforma) y `/join/CÓDIGO` (grupo) abren el re
 Para él no hay nadie que invite, así que su código se crea desde el servidor:
 
 ```bash
-dc exec api npm run invite          # en producción
+dc exec api npm run invite -w @coperoco/api     # en producción
 npm run invite -w @coperoco/api     # en desarrollo
 ```
 
 Imprime el código (10 caracteres, un solo uso, 7 días) y el enlace `https://TU_DOMINIO/invite/CÓDIGO`. Se puede pasar
-el número de días de validez como argumento (`npm run invite 30`). El mismo comando sirve en cualquier momento para
+el número de días de validez como argumento (p. ej. `npm run invite -w @coperoco/api 30`). El mismo comando sirve en cualquier momento para
 recuperar el acceso a la plataforma si nadie tiene invitaciones disponibles.
 
 `dc` es un alias de `docker compose -f deploy/docker-compose.prod.yml --env-file .env` (ver *Despliegue en VPS*).
@@ -114,7 +114,7 @@ la base de datos y la API no son accesibles desde Internet.
 **Después del primer despliegue, crea tu invitación** (el registro está cerrado hasta que exista una) y regístrate con el enlace:
 
 ```bash
-dc exec api npm run invite
+dc exec api npm run invite -w @coperoco/api
 ```
 
 **Actualizar:** `cd ~/coperoco && git pull && dc up -d --build` (las migraciones se aplican solas al arrancar la API).
